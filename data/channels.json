@@ -1,0 +1,28 @@
+{
+  "القناة الرئيسية": {
+    "channel_name": "",
+    "platform_pct": 0.03,
+    "payment_pct": 0.025,
+    "marketing_pct": 0.28,
+    "opex_pct": 0.06,
+    "vat_rate": 0.15,
+    "discount_rate": 0.1,
+    "shipping_fixed": 20.0,
+    "preparation_fee": 6.0,
+    "free_shipping_threshold": 98.0,
+    "custom_fees": {}
+  },
+  "منصة نينجا ": {
+    "channel_name": "",
+    "platform_pct": 0.0,
+    "payment_pct": 0.025,
+    "marketing_pct": 0.3,
+    "opex_pct": 0.04,
+    "vat_rate": 0.15,
+    "discount_rate": 0.1,
+    "shipping_fixed": 0.0,
+    "preparation_fee": 0.0,
+    "free_shipping_threshold": 0.0,
+    "custom_fees": {}
+  }
+}
