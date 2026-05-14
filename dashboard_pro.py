@@ -425,6 +425,13 @@ except Exception as e:
 
 
 def render_commercial_readiness(report, key_prefix: str = "readiness", compact: bool = False):
+    if report is None:
+        st.warning("ارفع ملفات Zoho الثلاثة أولا حتى يتم إنشاء تقرير جاهزية البيانات.")
+        if st.button("فتح صفحة رفع ملفات Zoho", type="primary", width="stretch", key=f"{key_prefix}_open_upload"):
+            st.session_state.page = "upload"
+            st.rerun()
+        return
+
     status_text = "جاهز للتشغيل التجاري" if report.is_ready else "يحتاج مراجعة قبل التشغيل"
     if report.is_ready:
         st.success(f"{status_text} - آخر فحص: {report.checked_at}")
@@ -1483,7 +1490,7 @@ elif st.session_state.page == "pricing":
     st.markdown("حساب التكلفة الكاملة وتحليل هوامش الربح لمنتج أو بكج واحد")
     st.markdown("---")
 
-    if not quality_report.is_ready:
+    if quality_report is None or not quality_report.is_ready:
         st.error("لا يمكن اعتماد تسعير تجاري قبل معالجة مشاكل البيانات الحرجة.")
         render_commercial_readiness(quality_report, key_prefix="pricing_blocker")
         st.stop()
@@ -2146,7 +2153,7 @@ elif st.session_state.page == "custom_package":
     st.markdown("قم بتجميع منتجات وبكجات مع بعضها لإنشاء بكج جديد واحسب تكلفته وهامش ربحه")
     st.markdown("---")
 
-    if not quality_report.is_ready:
+    if quality_report is None or not quality_report.is_ready:
         st.error("لا يمكن إنشاء تسعير بكج تجاري قبل معالجة مشاكل البيانات الحرجة.")
         render_commercial_readiness(quality_report, key_prefix="custom_package_blocker")
         st.stop()
@@ -3127,7 +3134,7 @@ elif st.session_state.page == "profit_margins":
         "احسب أسعار جميع المنتجات والبكجات دفعة واحدة مع لوحات بصرية، تنبيهات ذكية، وتصدير فوري.", "info"
     )
 
-    if not quality_report.is_ready:
+    if quality_report is None or not quality_report.is_ready:
         st.error("لا يمكن تشغيل التسعير الجماعي قبل معالجة مشاكل البيانات الحرجة.")
         render_commercial_readiness(quality_report, key_prefix="bulk_pricing_blocker")
         st.stop()
