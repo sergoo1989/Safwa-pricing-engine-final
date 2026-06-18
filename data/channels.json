@@ -2,7 +2,7 @@
   "القناة الرئيسية": {
     "channel_name": "",
     "platform_pct": 0.03,
-    "payment_pct": 0.025,
+    "payment_pct": 0.0,
     "marketing_pct": 0.28,
     "opex_pct": 0.06,
     "vat_rate": 0.15,

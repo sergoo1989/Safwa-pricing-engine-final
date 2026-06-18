@@ -11,11 +11,12 @@ from .models import Material
 ZOHO_ITEMS_FILE = "zoho_items.csv"
 ZOHO_COMPOSITES_FILE = "zoho_composite_items.csv"
 ZOHO_VALUATION_FILE = "zoho_inventory_valuation.csv"
+VALUATION_REQUIRED_COLUMNS = ("Item ID", "Item Name", "Stock On Hand", "Inventory Asset Value")
 
 
 def _read_table(path: Path) -> pd.DataFrame:
     if path.suffix.lower() in {".xlsx", ".xls"}:
-        return pd.read_excel(path)
+        return pd.read_excel(path, dtype=object)
 
     for encoding in ("utf-8-sig", "utf-8", "cp1256"):
         try:
@@ -59,6 +60,62 @@ def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _unique_column_names(values: Iterable) -> list[str]:
+    names: list[str] = []
+    seen: Dict[str, int] = {}
+
+    for index, value in enumerate(values):
+        base_name = _clean_text(value) or f"Unnamed: {index}"
+        if base_name in seen:
+            seen[base_name] += 1
+            names.append(f"{base_name}.{seen[base_name]}")
+        else:
+            seen[base_name] = 0
+            names.append(base_name)
+
+    return names
+
+
+def _ensure_valuation_sku_column(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "sku" not in df.columns:
+        for column in df.columns:
+            if str(column).strip().lower() == "sku":
+                df["sku"] = df[column]
+                break
+    return df
+
+
+def _normalise_valuation_frame(valuation_df: pd.DataFrame) -> pd.DataFrame:
+    """Support both edited valuation sheets and raw Zoho xlsx exports.
+
+    Raw Zoho Inventory Valuation Summary files include a report title above the
+    actual table. When pandas reads that file normally, the title becomes the
+    dataframe header and the real column names appear in the first data row.
+    """
+
+    valuation_df = _ensure_valuation_sku_column(_normalise_columns(valuation_df))
+    required_set = set(VALUATION_REQUIRED_COLUMNS)
+    if required_set.issubset(valuation_df.columns) and "sku" in valuation_df.columns:
+        return valuation_df
+
+    for row_position, (_, row) in enumerate(valuation_df.iterrows()):
+        values = [_clean_text(value) for value in row.tolist()]
+        value_set = set(values)
+        has_required_columns = required_set.issubset(value_set)
+        has_sku_column = any(value.lower() == "sku" for value in values)
+        if not (has_required_columns and has_sku_column):
+            continue
+
+        promoted_df = valuation_df.iloc[row_position + 1 :].copy()
+        promoted_df.columns = _unique_column_names(values)
+        promoted_df = _ensure_valuation_sku_column(_normalise_columns(promoted_df))
+        promoted_df = promoted_df.dropna(how="all").reset_index(drop=True)
+        return promoted_df
+
+    return valuation_df
+
+
 def _first_existing_path(data_dir: Path, candidates: Iterable[str]) -> Optional[Path]:
     for candidate in candidates:
         path = data_dir / candidate
@@ -92,7 +149,9 @@ def find_zoho_files(data_dir: str | Path) -> Optional[Tuple[Path, Path, Path]]:
         (
             ZOHO_VALUATION_FILE,
             "Inventory Valuation Summary.csv",
+            "Inventory Valuation Summary.xlsx",
             "Inventory Valuation Summary (1).csv",
+            "Inventory Valuation Summary (1).xlsx",
         ),
     )
 
@@ -118,6 +177,7 @@ def validate_zoho_export_frames(
 ) -> pd.DataFrame:
     """Return a validation table for uploaded Zoho exports."""
 
+    valuation_df = _normalise_valuation_frame(valuation_df)
     checks = [
         ("Item", _normalise_columns(items_df), ("Item ID", "Item Name", "SKU", "Purchase Rate", "Category Name", "Status")),
         (
@@ -128,7 +188,7 @@ def validate_zoho_export_frames(
         (
             "Inventory Valuation Summary",
             _normalise_columns(valuation_df),
-            ("Item ID", "Item Name", "Stock On Hand", "Inventory Asset Value"),
+            VALUATION_REQUIRED_COLUMNS,
         ),
     ]
 
@@ -233,7 +293,7 @@ def load_zoho_cost_data_from_frames(
 
     items_df = _normalise_columns(items_df)
     composites_df = _normalise_columns(composites_df)
-    valuation_df = _normalise_columns(valuation_df)
+    valuation_df = _normalise_valuation_frame(valuation_df)
 
     _require_columns(
         items_df,
@@ -247,7 +307,7 @@ def load_zoho_cost_data_from_frames(
     )
     _require_columns(
         valuation_df,
-        ("Item ID", "Item Name", "Stock On Hand", "Inventory Asset Value", "sku"),
+        (*VALUATION_REQUIRED_COLUMNS, "sku"),
         "Zoho Inventory Valuation",
     )
 

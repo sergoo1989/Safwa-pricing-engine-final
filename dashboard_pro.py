@@ -557,13 +557,14 @@ if st.session_state.page == "upload":
     st.subheader("رفع ملفات Zoho")
     st.info(
         "ارفع ملفات Zoho الثلاثة: Item، Composite Item، و Inventory Valuation Summary. "
+        "يمكن رفع ملف تقييم المخزون كما ينزل من Zoho بدون تعديل. "
         "سيتم اعتماد متوسط تقييم المخزون أولا، ثم Purchase Rate عند عدم وجود متوسط صالح."
     )
 
     def read_uploaded_table(uploaded_file):
         if uploaded_file.name.lower().endswith(".csv"):
             return pd.read_csv(uploaded_file, encoding="utf-8-sig", low_memory=False)
-        return pd.read_excel(uploaded_file)
+        return pd.read_excel(uploaded_file, dtype=object)
 
     zoho_items_file = st.file_uploader("ملف البنود Item", type=["csv", "xlsx"], key="upload_zoho_items")
     zoho_composites_file = st.file_uploader(
@@ -2402,6 +2403,26 @@ elif st.session_state.page == "custom_package":
                     key="custom_pkg_channel"
                 )
 
+            # اختيارات استبعاد رسوم معينة لهذا البكج
+            skip_shipping = st.checkbox(
+                "🚚 بدون رسوم شحن",
+                value=False,
+                help="استبعد رسوم الشحن لهذا البكج فقط",
+                key="custom_pkg_skip_shipping",
+            )
+            skip_preparation = st.checkbox(
+                "🧰 بدون رسوم تجهيز",
+                value=False,
+                help="استبعد رسوم التجهيز/التعبئة لهذا البكج فقط",
+                key="custom_pkg_skip_preparation",
+            )
+            skip_marketing = st.checkbox(
+                "📢 بدون رسوم تسويق",
+                value=False,
+                help="استبعد نسبة التسويق من حساب هذا البكج",
+                key="custom_pkg_skip_marketing",
+            )
+
             # Strategy and pricing parameters
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -2429,7 +2450,9 @@ elif st.session_state.page == "custom_package":
                     max_value=20,
                     value=0,
                     step=1,
-                    key="custom_pkg_marketing"
+                    key="custom_pkg_marketing",
+                    disabled=skip_marketing,
+                    help="يتم تجاهلها عند اختيار بدون رسوم تسويق",
                 )
             
             with col4:
@@ -2464,11 +2487,12 @@ elif st.session_state.page == "custom_package":
 
             if run_pricing:
                 ch = channels[selected_channel]
-                shipping = ch.shipping_fixed
-                preparation = ch.preparation_fee
+                shipping = 0.0 if skip_shipping else ch.shipping_fixed
+                preparation = 0.0 if skip_preparation else ch.preparation_fee
                 vat_rate = ch.vat_rate
                 free_threshold = getattr(ch, "free_shipping_threshold", 0)
                 custom_fees = getattr(ch, "custom_fees", {}) or {}
+                marketing_effective = 0.0 if skip_marketing else ch.marketing_pct + (marketing_boost / 100)
 
                 # عرض شروط المنصة المختارة
                 st.info(f"📋 **شروط المنصة المختارة ({selected_channel}):**\n"
@@ -2479,7 +2503,7 @@ elif st.session_state.page == "custom_package":
 
                 channel_dict = {
                     "opex_pct": ch.opex_pct,
-                    "marketing_pct": ch.marketing_pct + (marketing_boost / 100),
+                    "marketing_pct": marketing_effective,
                     "platform_pct": ch.platform_pct,
                     "payment_pct": ch.payment_pct,
                     "vat_rate": vat_rate,
@@ -2780,6 +2804,9 @@ elif st.session_state.page == "custom_package":
                             "سعر بعد الخصم": breakdown["price_after_discount"],
                             "الربح": breakdown["profit"],
                             "هامش الربح %": breakdown["margin_pct"] * 100,
+                            "بدون رسوم شحن": "نعم" if skip_shipping else "لا",
+                            "بدون رسوم تجهيز": "نعم" if skip_preparation else "لا",
+                            "بدون رسوم تسويق": "نعم" if skip_marketing else "لا",
                             "المكونات": " + ".join([f"{c['name']} (x{c['quantity']})" for c in st.session_state.package_components]),
                         }
 
@@ -2808,6 +2835,9 @@ elif st.session_state.page == "custom_package":
                                 "profit": pricing_record.get("الربح", 0),
                                 "details": {
                                     "components": pricing_record.get("المكونات", ""),
+                                    "skip_shipping": skip_shipping,
+                                    "skip_preparation": skip_preparation,
+                                    "skip_marketing": skip_marketing,
                                     "saved_from": "custom_package_builder",
                                 },
                             },
